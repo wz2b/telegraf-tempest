@@ -10,9 +10,14 @@ import (
 	"time"
 )
 
-var logWriter = tclogger.Create().Start()
+var telegrafLogger = tclogger.Create().Start()
 
 func main() {
+
+	/*
+	 * Install the telegraf compatible log writer
+	 */
+	telegrafLogger.Writer = os.Stdout
 
 	sock, err := net.ListenPacket("udp", ":50222")
 	if err != nil {
@@ -63,7 +68,10 @@ func writeHubStatus(ostream io.Writer, bytes []byte) {
 		metric, _ := CreateTempestMetricNow("hub_status")
 		metric.AddField("seq", hub.Seq)
 		metric.AddField("rssi", hub.RSSI)
-		metric.WriteTo(ostream)
+		_, err := metric.WriteTo(ostream)
+		if err != nil {
+			log.Print(err)
+		}
 	}
 }
 
@@ -85,7 +93,10 @@ func writeRapidWind(ostream io.Writer, ByteBuf []byte) {
 
 		v, e = wind.Direction()
 		metric.AddFieldIfValid("wind_dir", v, e)
-		metric.WriteTo(ostream)
+		_, err := metric.WriteTo(ostream)
+		if err != nil {
+			log.Print(err)
+		}
 	}
 }
 
@@ -95,60 +106,64 @@ func writeStationObservation(ostream io.Writer, bytes []byte) {
 	if err != nil {
 		log.Print(err)
 		log.Print(string(bytes))
-	} else {
-		now := time.Now()
-		numObs := observation.NumObservations()
-		for obs := 0; obs < numObs; obs++ {
+		return
+	}
+	now := time.Now()
+	numObs := observation.NumObservations()
+	for obs := 0; obs < numObs; obs++ {
 
-			t, err := observation.Time(obs)
+		t, err := observation.Time(obs)
 
-			if err != nil {
-				log.Println("Unable to get observation time")
-			} else {
-				if t == nil {
-					t = &now
-				}
-				metric, _ := CreateTempestMetric("observation", *t)
-				metric.AddTag("station", observation.SerialNumber)
+		if err != nil {
+			log.Println("Unable to get observation time")
+			return
+		}
 
-				v, e := observation.AirTemp(obs)
-				metric.AddFieldIfValid("temperature", v, e)
+		if t == nil {
+			t = &now
+		}
+		metric, _ := CreateTempestMetric("observation", *t)
+		metric.AddTag("station", observation.SerialNumber)
 
-				v, e = observation.RelativeHumidity(obs)
-				metric.AddFieldIfValid("humidity", v, e)
+		v, e := observation.AirTemp(obs)
+		metric.AddFieldIfValid("temperature", v, e)
 
-				v, e = observation.StationPressure(obs)
-				metric.AddFieldIfValid("pressure", v, e)
+		v, e = observation.RelativeHumidity(obs)
+		metric.AddFieldIfValid("humidity", v, e)
 
-				v, e = observation.WindAvg(obs)
-				metric.AddFieldIfValid("wind_spd", v, e)
+		v, e = observation.StationPressure(obs)
+		metric.AddFieldIfValid("pressure", v, e)
 
-				v, e = observation.WindGust(obs)
-				metric.AddFieldIfValid("wind_gust", v, e)
+		v, e = observation.WindAvg(obs)
+		metric.AddFieldIfValid("wind_spd", v, e)
 
-				v, e = observation.WindLull(obs)
-				metric.AddFieldIfValid("wind_lull", v, e)
+		v, e = observation.WindGust(obs)
+		metric.AddFieldIfValid("wind_gust", v, e)
 
-				v, e = observation.WindDir(obs)
-				metric.AddFieldIfValid("wind_dir", v, e)
+		v, e = observation.WindLull(obs)
+		metric.AddFieldIfValid("wind_lull", v, e)
 
-				v, e = observation.RainPreviousMinute(obs)
-				metric.AddFieldIfValid("rain_previous_min", v, e)
+		v, e = observation.WindDir(obs)
+		metric.AddFieldIfValid("wind_dir", v, e)
 
-				v, e = observation.LightningStrikeCount(obs)
-				metric.AddFieldIfValid("lightning_strikes", v, e)
+		v, e = observation.RainPreviousMinute(obs)
+		metric.AddFieldIfValid("rain_previous_min", v, e)
 
-				v, e = observation.UV(obs)
-				metric.AddFieldIfValid("uv", v, e)
+		v, e = observation.LightningStrikeCount(obs)
+		metric.AddFieldIfValid("lightning_strikes", v, e)
 
-				v, e = observation.Illuminance(obs)
-				metric.AddFieldIfValid("illuminance", v, e)
+		v, e = observation.UV(obs)
+		metric.AddFieldIfValid("uv", v, e)
 
-				v, e = observation.SolarRadiation(obs)
-				metric.AddFieldIfValid("solar_radiation", v, e)
+		v, e = observation.Illuminance(obs)
+		metric.AddFieldIfValid("illuminance", v, e)
 
-				metric.WriteTo(ostream)
-			}
+		v, e = observation.SolarRadiation(obs)
+		metric.AddFieldIfValid("solar_radiation", v, e)
+
+		_, err = metric.WriteTo(ostream)
+		if err != nil {
+			log.Print(err)
 		}
 	}
 }
@@ -159,13 +174,16 @@ func writeDeviceStatus(ostream io.Writer, bytes []byte) {
 	if err != nil {
 		log.Print(err)
 		log.Print(string(bytes))
-	} else {
-		metric, _ := CreateTempestMetricNow("device_status")
-		metric.AddTag("station", status.SerialNumber)
-		metric.AddField("sensor_status", status.SensorStatus)
-		metric.AddField("rssi", status.RSSI)
-		metric.AddField("hub_rssi", status.HubRSSI)
-		metric.AddField("battery", status.Voltage)
-		metric.WriteTo(ostream)
+		return
+	}
+	metric, _ := CreateTempestMetricNow("device_status")
+	metric.AddTag("station", status.SerialNumber)
+	metric.AddField("sensor_status", status.SensorStatus)
+	metric.AddField("rssi", status.RSSI)
+	metric.AddField("hub_rssi", status.HubRSSI)
+	metric.AddField("battery", status.Voltage)
+	_, err = metric.WriteTo(ostream)
+	if err != nil {
+		log.Print(err)
 	}
 }

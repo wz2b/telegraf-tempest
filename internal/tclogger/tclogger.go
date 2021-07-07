@@ -98,7 +98,11 @@ func (w *TelegrafCompatibleLogger) formatMeasurement(bytesToWrite []byte) (int, 
 	serializer := lineProtocol.NewEncoder(buf)
 	serializer.SetMaxLineBytes(4096)
 	serializer.SetFieldTypeSupport(lineProtocol.UintSupport)
-	serializer.Encode(metric)
+	_, err = serializer.Encode(metric)
+
+	if err != nil {
+		return 0, err
+	}
 
 	strbuf := buf.String()
 	if len(strbuf) > 0 {
