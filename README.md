@@ -31,11 +31,6 @@ That's pretty much all you have to do, but if that's all you have the data won't
 A more complete example is:
 
 ```yaml
-[[aggregators.merge]]
-  ## If true, the original metric will be dropped by the
-  ## aggregator and will not get sent to the output plugins.
-  drop_original = true
-
 [[outputs.influxdb_v2]]
   urls = ["http://127.0.0.1:8086"]
   bucket = "power"
