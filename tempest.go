@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-var telegrafLogger = tclogger.Create().Start()
+var telegrafLogger = tclogger.Create()
 
 func main() {
 
@@ -18,6 +18,7 @@ func main() {
 	 * Install the telegraf compatible log writer
 	 */
 	telegrafLogger.Writer = os.Stdout
+	telegrafLogger.Start()
 
 	sock, err := net.ListenPacket("udp", ":50222")
 	if err != nil {
@@ -49,6 +50,8 @@ func main() {
 			writeDeviceStatus(os.Stdout, bytes)
 		} else if message.MessageType == "obs_st" {
 			writeStationObservation(os.Stdout, bytes)
+		} else if message.MessageType == "evt_strike" {
+			writeLightningStrike(os.Stdout, bytes)
 		} else {
 			log.Printf("Received: unknown message %s\n", message.MessageType)
 			log.Print(string(byteBuf[:n]))
@@ -56,6 +59,25 @@ func main() {
 
 	}
 
+}
+
+func writeLightningStrike(ostream *os.File, bytes []byte) {
+	var strike LightningStrikeEvent
+	err := json.Unmarshal(bytes, &strike)
+	if err != nil {
+		log.Print(err)
+		log.Print(string(bytes))
+	} else {
+		metric, _ := CreateTempestMetricNow("lightning_strike")
+		metric.AddTag("station", strike.SerialNumber)
+
+		metric.AddField("distance_km", strike.GetDistanceKm())
+		metric.AddField("energy", strike.GetStrikeEnergy())
+		_, err := metric.WriteTo(ostream)
+		if err != nil {
+			log.Print(err)
+		}
+	}
 }
 
 func writeHubStatus(ostream io.Writer, bytes []byte) {
@@ -66,6 +88,7 @@ func writeHubStatus(ostream io.Writer, bytes []byte) {
 		log.Print(string(bytes))
 	} else {
 		metric, _ := CreateTempestMetricNow("hub_status")
+		metric.AddTag("hub", hub.SerialNumber)
 		metric.AddField("seq", hub.Seq)
 		metric.AddField("rssi", hub.RSSI)
 		_, err := metric.WriteTo(ostream)

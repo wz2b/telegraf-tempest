@@ -21,8 +21,11 @@ jobs:
     - name: Build
       run: go build -v ./...
 
+
     - name: Test
-      run: go test -v ./...
+      run: |
+        go test -v ./...
+        ls -lR
       
     - name: Deploy
       uses: actions/upload-artifact@v2
