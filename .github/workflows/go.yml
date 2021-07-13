@@ -30,7 +30,7 @@ jobs:
     - name: Deploy
       uses: actions/upload-artifact@v2
       with: 
-          name: linux-tempest_udp-${{ github.ref }}
+          name: linux-tempest_udp-${{ env.VERSION }}
           path: tempest_udp
 
   build2:
@@ -52,5 +52,5 @@ jobs:
       - name: Deploy
         uses: actions/upload-artifact@v2
         with: 
-          name: windows-tempest_udp-${{ github.ref }}
+          name: windows-tempest_udp-${{ env.VERSION }}
           path: tempest_udp.exe
