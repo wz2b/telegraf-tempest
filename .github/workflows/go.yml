@@ -21,15 +21,16 @@ jobs:
     - name: Build
       run: |
         go build -v
+
         ls -lR
 
     - name: Test
-      run: go test -v ./...
+      run: go test -v
 
     - name: Deploy
       uses: actions/upload-artifact@v2
       with: 
-          name: output-linux-executable
+          name: linux-tempest_udp-$GITHUB_RUN_NUMBER
           path: tempest_udp
 
   build2:
@@ -43,14 +44,13 @@ jobs:
           go-version: 1.16
 
       - name: Build
-        run: go build -v ./...
+        run: go build -v
 
       - name: Test
-        run: go test -v ./...
+        run: go test -v
 
-      
       - name: Deploy
         uses: actions/upload-artifact@v2
         with: 
-          name: output-windows-executable
+          name: windows-tempest_udp-$GITHUB_RUN_NUMBER
           path: tempest_udp.exe
