@@ -23,6 +23,12 @@ jobs:
 
     - name: Test
       run: go test -v ./...
+      
+    - name: Deploy
+      uses: actions/upload-artifact@v2
+      with: 
+          name: tempest_udp
+          path: downloads
 
   build2:
       runs-on: windows-latest
@@ -39,3 +45,9 @@ jobs:
 
       - name: Test
         run: go test -v ./...
+        
+      - name: Deploy
+        uses: actions/upload-artifact@v2
+        with: 
+          name: tempest_udp.EXE
+          path: downloads
