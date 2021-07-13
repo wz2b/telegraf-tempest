@@ -24,6 +24,9 @@ jobs:
     - name: Test
       run: go test -v ./...
       
+    - name: Mkdir
+      run: mkdir -p downloads
+      
     - name: Deploy
       uses: actions/upload-artifact@v2
       with: 
@@ -45,7 +48,10 @@ jobs:
 
       - name: Test
         run: go test -v ./...
-        
+
+      - name: Mkdir
+        run: mkdir -p downloads
+      
       - name: Deploy
         uses: actions/upload-artifact@v2
         with: 
