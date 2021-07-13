@@ -19,14 +19,13 @@ jobs:
         go-version: 1.16
 
     - name: Build
-      run: go build -v ./...
-
+      run: |
+        go build -v ./...
+        ls -lR
 
     - name: Test
-      run: |
-        go test -v ./...
-        ls -lR
-      
+      run: go test -v ./...
+
     - name: Deploy
       uses: actions/upload-artifact@v2
       with: 
