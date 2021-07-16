@@ -1,4 +1,4 @@
-module tempest_udp
+module telegraf-tempest
 
 go 1.15
 

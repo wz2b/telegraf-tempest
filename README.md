@@ -39,7 +39,7 @@ A more complete example is:
 
 [[inputs.execd]]
   ## Commands array
-  command = [ "tempest_udp" ]
+  command = [ "telegraf-tempest" ]
 
 ```
 

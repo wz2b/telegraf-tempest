@@ -6,7 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
-	"tempest_udp/internal/tclogger"
+	"telegraf-tempest/internal/tclogger"
 	"time"
 )
 
