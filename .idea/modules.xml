@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/tempest_udp.iml" filepath="$PROJECT_DIR$/.idea/tempest_udp.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/telegraf-tempest.iml" filepath="$PROJECT_DIR$/.idea/telegraf-tempest.iml" />
     </modules>
   </component>
 </project>
