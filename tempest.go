@@ -6,19 +6,20 @@ import (
 	"log"
 	"net"
 	"os"
-	"telegraf-tempest/internal/tclogger"
 	"time"
 )
 
-var telegrafLogger = tclogger.Create()
+var config TempestAgentConfig
+
+const DAYS = 24 * time.Hour
 
 func main() {
+	config, err := parseCommandLine()
+	if err != nil {
+		panic(err)
+	}
 
-	/*
-	 * Install the telegraf compatible log writer
-	 */
-	telegrafLogger.Writer = os.Stdout
-	telegrafLogger.Start()
+	setupLogging(config)
 
 	sock, err := net.ListenPacket("udp", ":50222")
 	if err != nil {

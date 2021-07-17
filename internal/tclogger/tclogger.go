@@ -16,7 +16,7 @@ type TelegrafCompatibleLogger struct {
 	OutputAsMeasurement bool
 	MeasurementName     string
 
-	Writer     io.Writer
+	writer     io.Writer
 	lineBuffer string
 }
 
@@ -68,8 +68,8 @@ func (w *TelegrafCompatibleLogger) formatComment(bytesToWrite []byte) int {
 	for _, line := range lines {
 		/* Throw away any ampty lines */
 		if len(line) > 0 {
-			c1, _ := fmt.Fprint(w.Writer, "# ")
-			c2, _ := fmt.Fprintln(w.Writer, line)
+			c1, _ := fmt.Fprint(w.writer, "# ")
+			c2, _ := fmt.Fprintln(w.writer, line)
 			count += c1 + c2
 		}
 	}
@@ -90,7 +90,7 @@ func (w *TelegrafCompatibleLogger) formatMeasurement(bytesToWrite []byte) (int, 
 
 	metric, err := lineProtocol.New("log", tags, fields, time.Now())
 	if err != nil {
-		fmt.Fprintf(w.Writer, "# Error encoding log to metric: %s\n", err)
+		fmt.Fprintf(w.writer, "# Error encoding log to metric: %s\n", err)
 		return 0, err
 	}
 
@@ -106,7 +106,7 @@ func (w *TelegrafCompatibleLogger) formatMeasurement(bytesToWrite []byte) (int, 
 
 	strbuf := buf.String()
 	if len(strbuf) > 0 {
-		fmt.Fprintln(w.Writer, strbuf)
+		fmt.Fprintln(w.writer, strbuf)
 		return len(strbuf), nil
 	} else {
 		return 0, nil
@@ -121,24 +121,17 @@ func Create() *TelegrafCompatibleLogger {
 		OutputAsComment:     true,
 		OutputAsMeasurement: false,
 		MeasurementName:     "log",
-		Writer: os.Stderr,
+		writer:              os.Stderr,
 	}
-}
-
-/*
- * Install this tclogger as the 'writer' for the default logger
- */
-func (l *TelegrafCompatibleLogger) Install() *TelegrafCompatibleLogger {
-	log.SetOutput(l)
-	return l
 }
 
 /*
  * Start this teclogger, which is the same as calling Install() except
  * it also announces itself
  */
-func (l *TelegrafCompatibleLogger) Start() *TelegrafCompatibleLogger {
-	l.Install()
+func (l *TelegrafCompatibleLogger) Start(writer io.Writer) *TelegrafCompatibleLogger {
+	l.writer = writer
+	log.SetOutput(l)
 	log.Printf("Telegraf compatible logger started at %s\n",
 		time.Now().Format(time.RFC822))
 	return l

@@ -53,14 +53,19 @@ whatever Wi-Fi network it is conneted to
 * device_status - info about the remote device, including two RSSIs which are also undocumented,
 but it's likely that one of them is tempest-to-hub and the other is hub-to-tempest
  
-#### Error Output
-Logging in go is a mess.
+#### Logging
 
-This project includes a lightweight log adapter that attempts to put output log messages
-with a leading "comment" indicator so that telegraf will ignore them.  This works if you
-set the logger to write to os.Stdout, but if you do that you get no feedback at all.
-On the other hand, if you configure it to write to os.Stderr telegraf sees it as an actual
-error, even though some of what's output may be status or debug messages. 
+Optionally you can set a "--log" parameter which can be either a file
+path, "stderr", or "stdout".  The default is stderr.
+
+If you choose to write to standard output, all log message lines will be prepended
+with a # to make them look like influx line protocol comments.
+
+Log rotation is included, with fixed parameters:
+
+* Logs rotate when the size exceeds 10 megabytes
+* Up to 10 previous logs are kept (gzipped)
+* Log files older than 30 days are purged
 
 #### Future Improvements
  * Make the individual measurement names be configurable
