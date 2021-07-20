@@ -5,16 +5,11 @@ import (
 )
 
 type TempestAgentConfig struct {
-	LogFile  string // may be file path, "stderr", or "stdout"
-	LogLevel string
-	Args     []string
+	Args []string
 }
 
 func parseCommandLine() (TempestAgentConfig, error) {
 	var config TempestAgentConfig
-
-	flag.StringVar(&config.LogFile, "log", "stderr", "log destination, can be \"stdout\", \"stderr\", or file path")
-	flag.StringVar(&config.LogLevel, "log-level", "error", "log destination, can be \"stdout\", \"stderr\", or file path")
 
 	flag.Parse()
 

@@ -2,8 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	kitlog "github.com/go-kit/kit/log"
+	"github.com/go-kit/kit/log/level"
+	line_metric_encoder "github.com/wz2b/telegraf-execd-toolkit/line-metric-encoder"
+	tlogger "github.com/wz2b/telegraf-execd-toolkit/telegraf-logger"
 	"io"
-	"log"
 	"net"
 	"os"
 	"time"
@@ -13,24 +17,31 @@ var config TempestAgentConfig
 
 const DAYS = 24 * time.Hour
 
+var klog kitlog.Logger
+
 func main() {
-	config, err := parseCommandLine()
+	logFactory, err := tlogger.NewTelegrafLoggerConfiguration(true)
+
 	if err != nil {
 		panic(err)
 	}
 
-	setupLogging(config)
+	klog := logFactory.Create()
+
+	mp := line_metric_encoder.NewMetricEncoderPool()
 
 	sock, err := net.ListenPacket("udp", ":50222")
 	if err != nil {
-		log.Fatal(err)
+		level.Error(klog).Log("msg", "Unable to listen()", "error", err)
+		os.Exit(1)
 	}
 
 	byteBuf := make([]byte, 2000)
 	for {
 		n, _, err := sock.ReadFrom(byteBuf)
 		if err != nil {
-			log.Fatal("Could not read from socket", err)
+			level.Error(klog).Log("msg", "Could not read from socket", "error", err)
+			os.Exit(1)
 		}
 		bytes := byteBuf[:n]
 
@@ -40,96 +51,96 @@ func main() {
 		var message TempestMessage
 		err = json.Unmarshal(bytes, &message)
 		if err != nil {
-			log.Fatal("Error unmarshalling message", err)
+			level.Warn(klog).Log("msg", "Error unmarshalling message", "error", err)
+			continue
 		}
 
 		if message.MessageType == "rapid_wind" {
-			writeRapidWind(os.Stdout, bytes)
+			writeRapidWind(mp, os.Stdout, bytes)
 		} else if message.MessageType == "hub_status" {
-			writeHubStatus(os.Stdout, bytes)
+			writeHubStatus(mp, os.Stdout, bytes)
 		} else if message.MessageType == "device_status" {
-			writeDeviceStatus(os.Stdout, bytes)
+			writeDeviceStatus(mp, os.Stdout, bytes)
 		} else if message.MessageType == "obs_st" {
-			writeStationObservation(os.Stdout, bytes)
+			writeStationObservation(mp, os.Stdout, bytes)
 		} else if message.MessageType == "evt_strike" {
-			writeLightningStrike(os.Stdout, bytes)
+			writeLightningStrike(mp, os.Stdout, bytes)
 		} else {
-			log.Printf("Received: unknown message %s\n", message.MessageType)
-			log.Print(string(byteBuf[:n]))
+			klog.Log("msg",
+				fmt.Sprintf("Received: unknown message type %s\n", message.MessageType))
 		}
-
 	}
-
 }
 
-func writeLightningStrike(ostream *os.File, bytes []byte) {
+func writeLightningStrike(mp *line_metric_encoder.MetricEncoderPool, ostream *os.File, bytes []byte) {
 	var strike LightningStrikeEvent
 	err := json.Unmarshal(bytes, &strike)
 	if err != nil {
-		log.Print(err)
-		log.Print(string(bytes))
+		level.Debug(klog).Log("msg", "Unable to parse evt_strike", "error", err)
 	} else {
-		metric, _ := CreateTempestMetricNow("lightning_strike")
+		metric := mp.NewMetric("lightning_strike")
 		metric.AddTag("station", strike.SerialNumber)
 
 		metric.AddField("distance_km", strike.GetDistanceKm())
 		metric.AddField("energy", strike.GetStrikeEnergy())
-		_, err := metric.WriteTo(ostream)
+		_, err := metric.Write(ostream)
 		if err != nil {
-			log.Print(err)
+			level.Warn(klog).Log("msg", "unable to write evt_strike metric", "error", err)
 		}
 	}
 }
 
-func writeHubStatus(ostream io.Writer, bytes []byte) {
+func writeHubStatus(mp *line_metric_encoder.MetricEncoderPool, ostream io.Writer, bytes []byte) {
 	var hub HubStatus
 	err := json.Unmarshal(bytes, &hub)
 	if err != nil {
-		log.Print(err)
-		log.Print(string(bytes))
+		level.Warn(klog).Log("msg", "unable to parse hub status event", "error", err)
 	} else {
-		metric, _ := CreateTempestMetricNow("hub_status")
-		metric.AddTag("hub", hub.SerialNumber)
-		metric.AddField("seq", hub.Seq)
-		metric.AddField("rssi", hub.RSSI)
-		_, err := metric.WriteTo(ostream)
+		metric := mp.NewMetric("hub_status")
+		metric.WithTag("hub", hub.SerialNumber).WithField("seq", hub.Seq).WithField("rssi", hub.RSSI)
+
+		_, err := metric.Write(ostream)
 		if err != nil {
-			log.Print(err)
+			level.Warn(klog).Log("msg", "unable to write hub status metric", "error", err)
 		}
 	}
 }
 
-func writeRapidWind(ostream io.Writer, ByteBuf []byte) {
+func writeRapidWind(mp *line_metric_encoder.MetricEncoderPool, ostream io.Writer, ByteBuf []byte) {
 	var wind RapidWind
 	err := json.Unmarshal(ByteBuf, &wind)
 	if err != nil {
-		log.Print(err)
-		log.Print(string(ByteBuf))
+		level.Warn(klog).Log("msg", "unable to parse rapid wind event", "error", err)
 	} else {
 
-		metric, _ := CreateTempestMetricNow("wind")
+		metric := mp.NewMetric("wind")
 		v, e := wind.Speed()
 
-		metric.AddTag("hub", wind.HubSN)
-		metric.AddTag("station", wind.SerialNumber)
+		metric.WithTag("hub", wind.HubSN)
+		metric.WithTag("station", wind.SerialNumber)
 
-		metric.AddFieldIfValid("wind_speed", v, e)
+		addFieldIfNoError(metric, "wind_speed", v, e)
 
 		v, e = wind.Direction()
-		metric.AddFieldIfValid("wind_dir", v, e)
-		_, err := metric.WriteTo(ostream)
+		addFieldIfNoError(metric, "wind_dir", v, e)
+		_, err := metric.Write(ostream)
 		if err != nil {
-			log.Print(err)
+			level.Warn(klog).Log("msg", "unable to write hub status metric", "error", err)
 		}
 	}
 }
 
-func writeStationObservation(ostream io.Writer, bytes []byte) {
+func addFieldIfNoError(metric *line_metric_encoder.WrappedMetric, key string, value interface{}, err error) {
+	if err != nil {
+		metric.WithField(key, value)
+	}
+}
+
+func writeStationObservation(mp *line_metric_encoder.MetricEncoderPool, ostream io.Writer, bytes []byte) {
 	var observation StationObservation
 	err := json.Unmarshal(bytes, &observation)
 	if err != nil {
-		log.Print(err)
-		log.Print(string(bytes))
+		level.Warn(klog).Log("msg", "unable to parse station observation event", "error", err)
 		return
 	}
 	now := time.Now()
@@ -139,75 +150,76 @@ func writeStationObservation(ostream io.Writer, bytes []byte) {
 		t, err := observation.Time(obs)
 
 		if err != nil {
-			log.Println("Unable to get observation time")
+			level.Warn(klog).Log("msg", "unable to parse timestamp from observation", "error", err)
 			return
 		}
 
 		if t == nil {
 			t = &now
 		}
-		metric, _ := CreateTempestMetric("observation", *t)
+		metric := mp.NewMetric("observation").WithTime(*t)
 		metric.AddTag("station", observation.SerialNumber)
 
 		v, e := observation.AirTemp(obs)
-		metric.AddFieldIfValid("temperature", v, e)
+		addFieldIfNoError(metric, "temperature", v, e)
 
 		v, e = observation.RelativeHumidity(obs)
-		metric.AddFieldIfValid("humidity", v, e)
+		addFieldIfNoError(metric, "humidity", v, e)
 
 		v, e = observation.StationPressure(obs)
-		metric.AddFieldIfValid("pressure", v, e)
+		addFieldIfNoError(metric, "pressure", v, e)
 
 		v, e = observation.WindAvg(obs)
-		metric.AddFieldIfValid("wind_spd", v, e)
+		addFieldIfNoError(metric, "wind_spd", v, e)
 
 		v, e = observation.WindGust(obs)
-		metric.AddFieldIfValid("wind_gust", v, e)
+		addFieldIfNoError(metric, "wind_gust", v, e)
 
 		v, e = observation.WindLull(obs)
-		metric.AddFieldIfValid("wind_lull", v, e)
+		addFieldIfNoError(metric, "wind_lull", v, e)
 
 		v, e = observation.WindDir(obs)
-		metric.AddFieldIfValid("wind_dir", v, e)
+		addFieldIfNoError(metric, "wind_dir", v, e)
 
 		v, e = observation.RainPreviousMinute(obs)
-		metric.AddFieldIfValid("rain_previous_min", v, e)
+		addFieldIfNoError(metric, "rain_previous_min", v, e)
 
 		v, e = observation.LightningStrikeCount(obs)
-		metric.AddFieldIfValid("lightning_strikes", v, e)
+		addFieldIfNoError(metric, "lightning_strikes", v, e)
 
 		v, e = observation.UV(obs)
-		metric.AddFieldIfValid("uv", v, e)
+		addFieldIfNoError(metric, "uv", v, e)
 
 		v, e = observation.Illuminance(obs)
-		metric.AddFieldIfValid("illuminance", v, e)
+		addFieldIfNoError(metric, "illuminance", v, e)
 
 		v, e = observation.SolarRadiation(obs)
-		metric.AddFieldIfValid("solar_radiation", v, e)
+		addFieldIfNoError(metric, "solar_radiation", v, e)
 
-		_, err = metric.WriteTo(ostream)
+		_, err = metric.Write(ostream)
 		if err != nil {
-			log.Print(err)
+			level.Warn(klog).Log("msg", "unable to write station observation metric", "error", err)
+
 		}
 	}
 }
 
-func writeDeviceStatus(ostream io.Writer, bytes []byte) {
+func writeDeviceStatus(mp *line_metric_encoder.MetricEncoderPool, ostream io.Writer, bytes []byte) {
 	var status DeviceStatus
 	err := json.Unmarshal(bytes, &status)
 	if err != nil {
-		log.Print(err)
-		log.Print(string(bytes))
+		level.Warn(klog).Log("msg", "unable to parse device status event", "error", err)
+
 		return
 	}
-	metric, _ := CreateTempestMetricNow("device_status")
+	metric := mp.NewMetric("device_status")
 	metric.AddTag("station", status.SerialNumber)
 	metric.AddField("sensor_status", status.SensorStatus)
 	metric.AddField("rssi", status.RSSI)
 	metric.AddField("hub_rssi", status.HubRSSI)
 	metric.AddField("battery", status.Voltage)
-	_, err = metric.WriteTo(ostream)
+	_, err = metric.Write(ostream)
 	if err != nil {
-		log.Print(err)
+		level.Warn(klog).Log("msg", "unable to write device status metric", "error", err)
 	}
 }
