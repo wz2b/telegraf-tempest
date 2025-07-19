@@ -132,6 +132,8 @@ func writeRapidWind(mp *line_metric_encoder.MetricEncoderPool, ostream io.Writer
 
 func addFieldIfNoError(metric *line_metric_encoder.WrappedMetric, key string, value interface{}, err error) {
 	if err != nil {
+		level.Warn(klog).Log("msg", "unable to add field", "error", err)
+	} else {
 		metric.WithField(key, value)
 	}
 }
